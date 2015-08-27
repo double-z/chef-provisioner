@@ -114,7 +114,10 @@ class Chef
       action :_test_ready do
         ruby_block 'run_test_ready' do
           block do
-            # Can do Sanity Check/Validation etc. here
+            # Do Sanity Check/Validation etc. here
+            # i.e:
+            # checks_failed = check_if_something_fails
+            # raise "checks failed" if checks_failed
           end
           action :run
           notifies :generate_config, "chef_platform_provision[prod]", :immediately
@@ -151,6 +154,63 @@ class Chef
               files(
                 '/etc/opscode/chef-server.rb' => local_chef_server_rb_path,
                 '/etc/opscode-analytics/analytics.rb' => local_analytics_rb_path
+              )
+            end
+          end
+          notifies :_run_bootstrap, "chef_platform_provision[prod]", :immediately
+        end
+      end
+
+      action :_run_bootstrap do
+        rbm = machine new_platform_spec.chef_server_bootstrap_backend['node_name'] do
+          driver new_platform_spec.driver_name
+          action :nothing
+          machine_options machine_options_for(new_platform_spec.chef_server_bootstrap_backend)
+        end
+
+        rbm.run_action(:converge)
+
+        ruby_block 'notify_reconfigure_all_non_bootstrap' do
+          block do
+
+            chef_server_files.each do |server_file|
+              machine_file "/etc/opscode/#{server_file}" do
+                local_path "#{platform_policy_path}/#{server_file}"
+                machine new_platform_spec.chef_server_bootstrap_backend['node_name']
+                action :download
+              end
+            end
+
+            if with_analytics?
+              analytics_files.each do |analytics_file|
+                machine_file "/etc/opscode-analytics/#{analytics_file}" do
+                  local_path "#{platform_policy_path}/#{analytics_file}"
+                  machine new_platform_spec.chef_server_bootstrap_backend['node_name']
+                  action :download
+                end
+              end
+            end
+
+          end
+          action :nothing if standalone_server_only || !rbm.updated_by_last_action?
+          notifies :_reconfigure_all_non_bootstrap, "chef_platform_provision[prod]", :immediately
+        end
+  
+      end
+
+      # will only be accessible when notified by _run_bootstrap
+      action :_reconfigure_all_non_bootstrap do
+        machine_batch 'reconfigure_all_non_bootstrap' do
+          action :converge
+          new_platform_spec.all_nodes.each do |server|
+            next if current_platform_spec.is_bootstrap_backend?(server)
+            machine server['node_name'] do
+              driver current_platform_spec.driver_name
+              machine_options machine_opts_for(server)
+              files(
+                # Finish Me
+                chef_server_files
+                analytics_files
               )
             end
           end
@@ -233,6 +293,14 @@ class Chef
 
       def local_chef_server_rb_path
         ::File.join(platform_policy_path, "chef-server.rb")
+      end
+
+      def chef_server_files
+        %w(pivotal.pem webui_pub.pem private-chef-secrets.json webui_priv.pem)
+      end
+
+      def analytics_files
+        %w(pivotal.pem webui_pub.pem private-chef-secrets.json webui_priv.pem)
       end
 
       ##
