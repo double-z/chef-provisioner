@@ -140,7 +140,9 @@ class Chef
         @chef_server_bootstrap_backend ||= begin
           bootstrap_backend = ""
           chef_server_nodes.each do |node_data|
-            bootstrap_backend = node_data if (node_data['role'] == "backend" && node_data['bootstrap'] == true)
+            bootstrap_backend = node_data if ((node_data['role'] == "backend" &&
+                                               node_data['bootstrap'] == true) ||
+                                              node_data['role'] == "standalone")
           end
           bootstrap_backend
         end
@@ -380,10 +382,8 @@ class Chef
       end
 
       def save_data_bag(action_handler)
-        puts "Saving Data"
         self.platform_data.class
         self.platform_data.inspect
-        puts "Saving Data"
         _self = self
         # _self_platform_data = stringify_keys(_self.platform_data)
         # _chef_server = _self.chef_server

@@ -15,7 +15,7 @@ class Chef
           @destroy_machines ||= begin
             mbd = machine_batch 'machine_batch_destroy_all' do
               action :nothing
-              new_platform_spec.all_nodes.each do |server|
+              current_platform_spec.all_nodes.each do |server|
                 machine server['node_name'] do
                   driver new_platform_spec.driver_name
                   machine_options machine_opts_for(server)
@@ -47,6 +47,8 @@ class Chef
 
         def get_initial_converge_machine_data(servers)
           node_array = []
+          puts "SERVER_CLASS #{servers.class}"
+          puts "SERVER_INSPECT #{servers.inspect}"
           servers.each do |ready_machine|
             node_driver = Chef::Provider::ChefNode.new(ready_machine, run_context)
             node_driver.load_current_resource
@@ -109,10 +111,11 @@ class Chef
         def bootstrap_machine
           @bootstrap_machine ||= begin
             if chef_server_standalone?
-              server = new_platform_spec.chef_server_nodes[0]
+              server = current_platform_spec.chef_server_bootstrap_backend
               rbm = machine server['node_name'] do
                 driver new_platform_spec.driver_name
                 machine_options machine_opts_for(server)
+                attribute 'platform_node', server
                 attribute 'chef_platform', new_platform_spec.get_data
                 attribute 'chef-server', new_platform_spec.chef_server_data
                 attribute 'chef-analytics', new_platform_spec.analytics_data
@@ -124,9 +127,10 @@ class Chef
               rbm
             else
               server = new_platform_spec.chef_server_bootstrap_backend
-              rbm = machine new_platform_spec.chef_server_bootstrap_backend['node_name'] do
+              rbm = machine current_platform_spec.chef_server_bootstrap_backend['node_name'] do
                 driver new_platform_spec.driver_name
                 machine_options machine_opts_for(new_platform_spec.chef_server_bootstrap_backend)
+                attribute 'platform_node', server
                 attribute 'chef_platform', new_platform_spec.get_data
                 attribute 'chef-server', new_platform_spec.chef_server_data
                 attribute 'chef-analytics', new_platform_spec.analytics_data
@@ -140,14 +144,15 @@ class Chef
           end
         end
 
-        def non_bootstrap_machines
+        def non_bootstrap_non_builder_machines
           @non_bootstrap_machines ||= begin
             nbm = machine_batch 'reconfigure_non_bootstrap' do
-              new_platform_spec.all_non_bootstrap_nodes.each do |server|
+              current_platform_spec.all_non_bootstrap_nodes.each do |server|
                 raise "We should have an IP on #{server}" unless server['ipaddress']
                 machine server['node_name'] do
                   driver new_platform_spec.driver_name
                   machine_options machine_opts_for(server)
+                  attribute 'platform_node', server
                   attribute 'chef_platform', new_platform_spec.get_data
                   attribute 'chef-server', new_platform_spec.chef_server_data
                   attribute 'chef-analytics', new_platform_spec.analytics_data

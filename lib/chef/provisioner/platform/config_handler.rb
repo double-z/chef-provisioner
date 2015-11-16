@@ -6,7 +6,7 @@ require_relative 'coordinator.rb'
 class Chef
   module Provisioner
     module Platform
-      module DataHandler
+      module ConfigHandler
         include Coordinator
 
         ##
@@ -34,7 +34,46 @@ class Chef
           data['delivery']['version'] = new_resource.delivery_version
           data['delivery']['api_fqdn'] = new_resource.delivery_api_fqdn
           data['delivery']['configuration'] = new_resource.delivery_configuration
-          data['nodes'] = all_nodes_ready? ? all_ready_nodes : new_resource.nodes
+          if (current_platform_spec.all_nodes &&
+              !current_platform_spec.all_nodes.nil? &&
+              current_platform_spec.all_nodes.kind_of?(Array)
+              !current_platform_spec.all_nodes.empty?)
+            data['nodes'] = current_platform_spec.all_nodes
+          else
+            data['nodes'] = new_resource.nodes if new_resource.nodes
+          end
+          # _data = Chef::Provisioner::Helpers.deep_hashify(data)
+          # ndata = {}
+          ndata = data
+          # # puts ndata.to_yaml
+          # puts JSON.pretty_generate(ndata)
+          ndata
+        end
+
+        def use_platform_data(new_conf, current_conf)
+          data = {}
+          data['policygroup'] = new_resource.name
+          data['driver'] = {}
+          data['chef_server'] = {}
+          data['analytics'] = {}
+          data['supermarket'] = {}
+          data['delivery'] = {}
+          data['driver']['name'] = current_conf['driver_name']
+          data['chef_server']['version'] = new_conf.chef_server_version
+          data['chef_server']['package_source'] = new_conf.chef_server_package_source
+          data['chef_server']['topology'] = current_conf['topology']
+          data['chef_server']['api_fqdn'] = new_conf['chef_server']_api_fqdn
+          data['chef_server']['configuration'] = new_conf['chef_server']['configuration']
+          data['analytics']['version'] = new_conf['analytics_version']
+          data['analytics']['api_fqdn'] = new_conf.analytics_api_fqdn
+          data['analytics']['configuration'] = new_conf.analytics_configuration
+          data['supermarket']['version'] = new_conf.supermarket_version
+          data['supermarket']['api_fqdn'] = new_conf.supermarket_api_fqdn
+          data['supermarket']['configuration'] = new_conf.supermarket_configuration
+          data['delivery']['version'] = new_conf.delivery_version
+          data['delivery']['api_fqdn'] = new_conf.delivery_api_fqdn
+          data['delivery']['configuration'] = new_conf.delivery_configuration
+          data['nodes'] = new_resource.nodes if new_resource.nodes
           # _data = Chef::Provisioner::Helpers.deep_hashify(data)
           # ndata = {}
           ndata = data

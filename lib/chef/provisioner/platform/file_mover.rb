@@ -14,7 +14,7 @@ class Chef
         ##
         # File Download Resources
 
-        def download_all_files_from_bootstrap
+        def download_files_from_bootstrap
           download_chef_server_files
           if with_analytics?
             download_analytics_files
@@ -25,80 +25,6 @@ class Chef
           # end
           if with_delivery?
             download_delivery_files
-          end
-        end
-
-        def upload_bootsrap_files_to_non_bootstrap_nodes
-          # return if chef_server_standalone_only?
-          upload_chef_server_files
-          upload_analytics_files if with_analytics?
-          # upload_supermarket_files if with_supermarket?
-          upload_delivery_files if with_delivery?
-        end
-
-        def download_chef_server_files
-          # return if chef_server_standalone_only?
-          chef_server_files.each do |server_file|
-            chef_server_file_download = machine_file "/etc/opscode/#{server_file}" do
-              local_path "#{local_chef_server_cache_path}/#{server_file}"
-              if chef_server_standalone?
-                machine standalone_server_node['node_name']
-              else
-                machine new_platform_spec.chef_server_bootstrap_backend['node_name']
-              end
-              action :nothing
-            end
-            chef_server_file_download.run_action(:download)
-          end
-        end
-
-        def upload_chef_server_files
-          # return if chef_server_standalone_only?
-          new_platform_spec.all_non_bootstrap_nodes.each do |server|
-            chef_server_files.each do |server_file|
-              chef_server_file_upload = machine_file "/etc/opscode/#{server_file}" do
-                local_path "#{local_chef_server_cache_path}/#{server_file}"
-                machine server['node_name']
-                only_if do
-                  ::File.exists?("#{local_chef_server_cache_path}/#{server_file}")
-                end
-                action :nothing
-              end
-              chef_server_file_upload.run_action(:upload) # if ::File.exists?("#{local_chef_server_cache_path}/#{server_file}")
-            end
-          end
-        end
-
-        def download_analytics_files
-          # return if chef_server_standalone_only?
-          analytics_files.each do |analytics_file|
-            analytics_file_download =  machine_file "/etc/opscode-analytics/#{analytics_file}" do
-              local_path "#{local_analytics_cache_path}/#{analytics_file}"
-              if chef_server_standalone?
-                machine standalone_server_node['node_name']
-              else
-                machine new_platform_spec.chef_server_bootstrap_backend['node_name']
-              end
-              action :nothing
-            end
-            analytics_file_download.run_action(:download)
-          end
-        end
-
-        def upload_analytics_files
-          # return if chef_server_standalone_only?
-          new_platform_spec.all_non_bootstrap_nodes.each do |server|
-            analytics_files.each do |analytics_file|
-              analytics_file_upload =  machine_file "/etc/opscode-analytics/#{analytics_file}" do
-                local_path "#{local_analytics_cache_path}/#{analytics_file}"
-                machine server['node_name']
-                only_if do
-                  ::File.exists?("#{local_analytics_cache_path}/#{analytics_file}")
-                end
-                action :nothing
-              end
-              analytics_file_upload.run_action(:upload)
-            end
           end
         end
 
@@ -123,6 +49,86 @@ class Chef
           end
           delivery_trusted_cert.run_action(:download)
         end
+
+
+        def download_chef_server_files
+          # return if chef_server_standalone_only?
+          chef_server_files.each do |server_file|
+            chef_server_file_download = machine_file "/etc/opscode/#{server_file}" do
+              local_path "#{local_chef_server_cache_path}/#{server_file}"
+              if chef_server_standalone?
+                machine standalone_server_node['node_name']
+              else
+                machine new_platform_spec.chef_server_bootstrap_backend['node_name']
+              end
+              action :nothing
+            end
+            chef_server_file_download.run_action(:download)
+          end
+        end
+
+        def download_analytics_files
+          # return if chef_server_standalone_only?
+          analytics_files.each do |analytics_file|
+            analytics_file_download =  machine_file "/etc/opscode-analytics/#{analytics_file}" do
+              local_path "#{local_analytics_cache_path}/#{analytics_file}"
+              if chef_server_standalone?
+                machine standalone_server_node['node_name']
+              else
+                machine new_platform_spec.chef_server_bootstrap_backend['node_name']
+              end
+              action :nothing
+            end
+            analytics_file_download.run_action(:download)
+          end
+        end
+
+        def upload_bootsrap_files_to_non_bootstrap_nodes
+          # return if chef_server_standalone_only?
+          upload_chef_server_files
+          upload_analytics_files if with_analytics?
+          # upload_supermarket_files if with_supermarket?
+          upload_delivery_files if with_delivery?
+        end
+
+
+        def upload_chef_server_files
+          # return if chef_server_standalone_only?
+          new_platform_spec.all_non_bootstrap_nodes.each do |server|
+            chef_server_files.each do |server_file|
+              chef_server_file_upload = machine_file "/etc/opscode/#{server_file}" do
+                local_path "#{local_chef_server_cache_path}/#{server_file}"
+                machine server['node_name']
+                only_if do
+                  ::File.exists?("#{local_chef_server_cache_path}/#{server_file}")
+                end
+                action :nothing
+              end
+              chef_server_file_upload.run_action(:upload) # if ::File.exists?("#{local_chef_server_cache_path}/#{server_file}")
+            end
+          end
+        end
+
+
+
+        def upload_analytics_files
+          # return if chef_server_standalone_only?
+          new_platform_spec.all_non_bootstrap_nodes.each do |server|
+            analytics_files.each do |analytics_file|
+              analytics_file_upload =  machine_file "/etc/opscode-analytics/#{analytics_file}" do
+                local_path "#{local_analytics_cache_path}/#{analytics_file}"
+                machine server['node_name']
+                only_if do
+                  ::File.exists?("#{local_analytics_cache_path}/#{analytics_file}")
+                end
+                action :nothing
+              end
+              analytics_file_upload.run_action(:upload)
+            end
+          end
+        end
+
+
 
         def upload_delivery_files
           # return if chef_server_standalone_only?

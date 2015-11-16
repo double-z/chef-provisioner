@@ -31,19 +31,19 @@ class Chef
       ############################################
 
       action :notify_reconfigure do
-        reconfigure_updated = action_do_reconfigure
+        reconfigure_updated = action_reconfigure_all
         @new_resource.updated_by_last_action(reconfigure_updated)
       end
 
       action :reconfigure do
-        # reconfigure_updated = should_run? ? action_do_reconfigure : false
+        # reconfigure_updated = should_run? ? action_reconfigure_all : false
         if !all_nodes_ready?
           reconfigure_updated = action_ready_nodes
-        elsif (all_nodes_ready? &&
-               !(new_platform_spec.all_nodes.count == current_platform_spec.all_nodes.count))
-          raise "You need to use the :scale_frontends or :scale_builders to modify node count on an existing cluster"
+          # elsif (all_nodes_ready? &&
+          #        !(new_platform_spec.all_nodes.count == current_platform_spec.all_nodes.count))
+          #   raise "You need to use the :scale_frontends or :scale_builders to modify node count on an existing cluster"
         elsif all_nodes_ready? # & platform_configuration_updated?
-          reconfigure_updated = action_do_reconfigure
+          reconfigure_updated = action_reconfigure_all
         else
           log "#{policy_group.upcase} Platform Configuration and Nodes Up to Date"
         end
@@ -64,7 +64,7 @@ class Chef
       #    - allocate
       #    - ready
       #    - reconfigure_bootstrap
-      #    - do_reconfigure
+      #    - reconfigure_all
       #
       ############################################
 
@@ -103,27 +103,6 @@ class Chef
           action_allocate
           initial_converge_blank_machines.run_action(:converge)
           node_array = get_initial_converge_machine_data(initial_converge_blank_machines.machines)
-          puts "NODE_ARRAY"
-          puts "NODE_ARRAY"
-          puts "NODE_ARRAY"
-          puts "NODE_ARRAY"
-          puts "NODE_ARRAY"
-          puts "NODE_ARRAY"
-          puts "MARK"
-          puts "current_platform_spec.get_data"
-          puts current_platform_spec.get_data
-          puts node_array
-          puts "NODE_ARRAY"
-          puts "NODE_ARRAY1"
-          puts "MARK"
-          puts "new_platform_spec.get_data"
-          puts new_platform_spec.get_data
-          puts "NODE_ARRAY1"
-          puts "NODE_ARRAY"
-          puts "NODE_ARRAY"
-          puts "NODE_ARRAY"
-          puts "NODE_ARRAY"
-          puts "NODE_ARRAY"
           new_platform_spec.nodes = node_array
           pre_save_ready_machine_attrs_to_nodes(node_array)
           new_platform_spec.save_to_chef_platform_ready_nodes_data_bag(action_handler)
@@ -131,22 +110,7 @@ class Chef
           ready_updated_by_action = ready_machines.updated_by_last_action?
           ruby_block 'notify_reconfigure_ready' do
             block do
-              puts "NPS.all_nodes"
-              puts "NPS.all_nodes"
-              puts "NPS.all_nodes"
-              puts "NPS.all_nodes"
-              puts "ACTION"
-              puts "MARK"
-              puts "new_platform_spec.get_data"
-              puts new_platform_spec.get_data
-              puts "NPS.all_nodes"
-              puts "NPS.all_nodes"
-              puts "NPS.all_nodes"
-              puts "NPS.all_nodes"
-              puts "NPS.all_nodes"
-              puts "NPS.all_nodes"
-              puts "NPS.all_nodes"
-              new_platform_spec.status = "ready_complete_notify_reconfigure"
+              new_platform_spec.status = "ready_notify_reconfigure"
               new_platform_spec.save(action_handler)
             end
             action :nothing unless ready_updated_by_action
@@ -160,46 +124,17 @@ class Chef
       action :reconfigure_bootstrap do
         # ready_updated = false
         bootstrap_node_updated = false
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "MARK"
-        puts "current_platform_spec.get_datano_nodes"
-        puts new_platform_spec.get_data_no_nodes
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "MARK"
-        puts "new_platform_spec.get_data"
-        puts new_platform_spec.get_data
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "MARK"
-        puts "new_resource.action"
-        puts new_resource.action
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
-        puts "RECONFIGURE BOOTSTRAP"
         #   ready_updated = action_ready_nodes
         #   @reconfigure_action = ready_updated ? :converge_only : :converge
         @reconfigure_action = :converge
+        server = new_platform_spec.chef_server_nodes[0]
+        bootstrap_machine()
         bootstrap_machine.run_action(@reconfigure_action)
         bootstrap_node_updated = bootstrap_machine.updated_by_last_action?
         if (bootstrap_node_updated && !chef_server_standalone_only?)
           # FileMover::Download.all_files_from_bootstrap
           # files_updated = download_all_files_from_bootstrap
-          download_all_files_from_bootstrap
+          download_files_from_bootstrap
           upload_bootsrap_files_to_non_bootstrap_nodes # if files_updated
         end
         new_platform_spec.status = "bootstrap_reconfigured"
@@ -208,15 +143,16 @@ class Chef
         @new_resource.updated_by_last_action(bootstrap_node_updated)
       end
 
-      # PRIVATE ACTION: do_reconfigure
-      action :do_reconfigure do
-        # action_reconfigure_bootstrap
+      def reconfigure_non_bootstrap_non_builders(reconfigure_spec)
+      end
+
+      # PRIVATE ACTION: reconfigure_all
+      action :reconfigure_all do
         bootstrap_updated = action_reconfigure_bootstrap
         if bootstrap_updated && !chef_server_standalone_only?
           reconfigure_action = @reconfigure_action || :converge
-          non_bootstrap_machines.run_action(reconfigure_action)
-          new_platform_spec.save(action_handler)
-          new_platform_spec.status = "non_bootstrap_reconfigured"
+          non_bootstrap_non_builder_machines.run_action(reconfigure_action)
+          new_platform_spec.status = "cluster_bootstraped_reconfigured"
           new_platform_spec.save(action_handler)
         end
         @new_resource.updated_by_last_action(bootstrap_updated)
@@ -233,136 +169,18 @@ class Chef
       def load_current_resource
         @policy_group = new_resource.policy_group
         @current_platform_spec = Chef::Provisioner::ChefPlatformSpec.current_spec(policy_group)
+        puts "Class"
+        puts current_platform_spec.nodes.class
+        puts "empty"
+        puts current_platform_spec.nodes.empty?.to_s unless current_platform_spec.nodes.nil?
+        puts "cps nodes"
+        puts         current_platform_spec.nodes
+        puts "new_platform_data"
+        puts new_platform_data
+
         @new_platform_spec = Chef::Provisioner::ChefPlatformSpec.new_spec(policy_group,
                                                                           new_platform_data)
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR1"
-        # if !new_platform_spec.all_nodes.nil?
-        # # if new_platform_spec.all_nodes && (!new_platform_spec.all_nodes.nil? || !new_platform_spec.all_nodes.empty?)
-        #   puts new_platform_spec.all_nodes.count rescue false
-        #   puts new_platform_spec.nodes.count rescue false
-        #   puts current_platform_spec.all_nodes.count rescue false
-        # else
-        puts "MARK"
-        puts "MARK"
-        puts "new_platform_spec.get_data"
-        puts new_platform_spec.get_data
-        puts new_platform_spec.all_nodes.class
-
-        puts new_platform_spec.get_data
-        # end
-        puts "CURRENR1"
-        puts "CURRENR"
-        puts "MARK"
         new_platform_spec.nodes = all_ready_nodes if all_nodes_ready?
-        puts "CURRENR11"
-        # if !new_platform_spec.all_nodes.nil?
-        # # if new_platform_spec.all_nodes && (!new_platform_spec.all_nodes.nil? || !new_platform_spec.all_nodes.empty?)
-        #   puts new_platform_spec.all_nodes.count rescue false
-        #   puts new_platform_spec.nodes.count rescue false
-        #   puts current_platform_spec.all_nodes.count rescue false
-        # else
-        puts "MARK"
-        puts new_platform_spec.all_nodes.class
-
-        puts new_platform_spec.get_data
-        # end
-        puts "CURRENR11"
-
-        # puts "CURRENR"
-        # puts "CURRENR"
-        # puts "CURRENR"
-        # puts "CURRENR"
-        # puts "CURRENR"
-        # puts "CURRENR2"
-        # puts new_platform_spec.all_nodes.count
-        # puts current_platform_spec.all_nodes.count
-        # puts "CURRENR2"
-        # puts "CURRENR"
-        # puts "CURRENR"
-        # puts "CURRENR"
-        # puts "CURRENR"
-        # puts all_ready_nodes.class
-        # puts "INSPECT"
-        # puts all_ready_nodes.inspect
-        # puts "INSPECTED"
-        # if all_ready_nodes
-        #   all_ready_nodes.each do |k|
-        #     puts "READY_NODE: #{k.inspect}"
-        #   end
-        # end
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR2"
-        puts "CURRENR2"
-        puts "ACTION"
-        puts "MARK"
-        puts "UNSTRIPPEDnew_platform_spec.get_data"
-        puts new_platform_spec.get_data_no_nodes
-        puts "MARK"
-        puts "STRIPPEDnew_platform_spec.get_data"
-        puts strip_hash_nil(new_platform_spec.get_data)
-        puts "MARK"
-        puts "current_platform_spec.get_data"
-        puts new_platform_spec.get_data
-        puts current_platform_spec.all_nodes
-        puts current_platform_spec.nodes.class
-        puts "CURRENR2"
-        puts "CURRENR2"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        puts "CURRENR"
-        # puts self.new_resource.nodes.inspect
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts self.current_resource.inspect
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # puts "NEW"
-        # # puts self.instance_variable_get("@converge_actions")
-        # puts self.instance_variable_get("@current_platform_spec").platform_data['nodes']
-        # sleep 10
       end
     end
 
